@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { INCIDENT_TYPES, ROAD_NETWORK, INCIDENTS, TRAFFIC_LEVELS } from "@/lib/mockData";
+import { INCIDENT_TYPES, ROAD_NETWORK, INCIDENTS as SEED_INCIDENTS, TRAFFIC_LEVELS } from "@/lib/mockData";
 import { AlertTriangle, Siren, CarFront, Waves, ShieldAlert, HardHat } from "lucide-react";
 
 const iconMap = { AlertTriangle, Siren, CarFront, Waves, ShieldAlert, HardHat };
@@ -15,7 +15,7 @@ const colorFor = (level) => {
   }
 };
 
-export const TrafficMap = ({ onPickIncident, activeFilter = "all", showRoute = false }) => {
+export const TrafficMap = ({ incidents = SEED_INCIDENTS, onPickIncident, activeFilter = "all", showRoute = false }) => {
   const [hovered, setHovered] = useState(null);
 
   const visibleIncidents = INCIDENTS.filter(

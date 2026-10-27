@@ -1,6 +1,10 @@
-import React, { useState } from "react";
-import { INCIDENT_TYPES, TRAFFIC_LEVELS } from "@/lib/mockData";
-import { AlertTriangle, Siren, CarFront, Waves, ShieldAlert, HardHat, Camera, MapPin, Zap, Sparkles, Check } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { INCIDENT_TYPES, TRAFFIC_LEVELS, DEFAULT_REPORT_LOCATION } from "@/lib/mockData";
+import { useRoutePulseStore } from "@/store/useRoutePulseStore";
+import {
+  AlertTriangle, Siren, CarFront, Waves, ShieldAlert, HardHat,
+  Camera, MapPin, Zap, Sparkles, Check, X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -10,20 +14,53 @@ import { useNavigate } from "react-router-dom";
 
 const iconMap = { AlertTriangle, Siren, CarFront, Waves, ShieldAlert, HardHat };
 
+function readFileAsDataURL(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function Report() {
   const [step, setStep] = useState(1);
   const [type, setType] = useState(null);
   const [severity, setSeverity] = useState("dense");
   const [note, setNote] = useState("");
+  const [photo, setPhoto] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
   const [postToFeed, setPostToFeed] = useState(true);
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const fileRef = useRef(null);
   const navigate = useNavigate();
+  const submitReport = useRoutePulseStore((s) => s.submitReport);
 
-  const submit = () => {
-    setSent(true);
-    toast.success("Alerte envoyée ⚡", { description: "Merci, ta ville te remercie !" });
-    setTimeout(() => navigate("/app/feed"), 1600);
+  const handlePhoto = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhoto(file);
+    setPhotoPreview(await readFileAsDataURL(file));
   };
+
+  const removePhoto = () => {
+    setPhoto(null);
+    setPhotoPreview(null);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const submit = async () => {
+    setSubmitting(true);
+    await new Promise((r) => setTimeout(r, 600));
+    submitReport({ type, severity, note, postToFeed });
+    setSent(true);
+    setSubmitting(false);
+    toast.success("Alerte envoyée ⚡", { description: "Merci, la communauté est alertée !" });
+    setTimeout(() => navigate("/app/feed"), 2000);
+  };
+
+  const meta = type ? INCIDENT_TYPES[type] : null;
+  const totalSteps = 4;
 
   return (
     <div className="px-4 pt-4 pb-20">
@@ -39,12 +76,13 @@ export default function Report() {
         </div>
       </div>
 
-      {/* Progress dots */}
-      <div className="mt-4 flex items-center gap-1.5">
-        {[1,2,3].map((s) => (
-          <div key={s} className={`h-1.5 rounded-full transition-all ${s <= step ? "bg-primary flex-1" : "bg-muted flex-1 opacity-60"}`} />
-        ))}
-      </div>
+      {!sent && (
+        <div className="mt-4 flex items-center gap-1.5">
+          {Array.from({ length: totalSteps }).map((_, i) => (
+            <div key={i} className={`h-1.5 rounded-full transition-all ${i < step ? "bg-primary flex-1" : "bg-muted flex-1 opacity-60"}`} />
+          ))}
+        </div>
+      )}
 
       <AnimatePresence mode="wait">
         {sent ? (
@@ -61,13 +99,17 @@ export default function Report() {
             <p className="mt-1 text-sm text-muted-foreground max-w-xs">
               Ta contribution est visible sur la carte et dans le fil. +15 pts 🔥
             </p>
+            <div className="mt-6 flex gap-2">
+              <Button onClick={() => navigate("/app/feed")} variant="outline" className="rounded-xl">Voir le fil</Button>
+              <Button onClick={() => navigate("/app/carte")} className="rounded-xl bg-foreground text-background">Voir la carte</Button>
+            </div>
           </motion.div>
         ) : step === 1 ? (
           <motion.div key="s1" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}>
             <p className="mt-6 text-sm font-medium text-foreground">1. Que se passe-t-il ?</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
-              {Object.entries(INCIDENT_TYPES).map(([key, meta]) => {
-                const Icon = iconMap[meta.icon] || AlertTriangle;
+              {Object.entries(INCIDENT_TYPES).map(([key, m]) => {
+                const Icon = iconMap[m.icon] || AlertTriangle;
                 const active = type === key;
                 return (
                   <button
@@ -81,8 +123,8 @@ export default function Report() {
                       <Icon className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="font-semibold text-sm">{meta.label}</p>
-                      <p className="text-[11px] text-muted-foreground">{meta.emoji}</p>
+                      <p className="font-semibold text-sm">{m.label}</p>
+                      <p className="text-[11px] text-muted-foreground">{m.emoji}</p>
                     </div>
                   </button>
                 );
@@ -112,7 +154,7 @@ export default function Report() {
                     <p className="mt-1 text-[11px] text-muted-foreground">
                       {key === "fluid" && "Léger, ça passe"}
                       {key === "dense" && "Ralentissements"}
-                      {key === "blocked" && "Ça n’avance plus"}
+                      {key === "blocked" && "Ça n'avance plus"}
                       {key === "danger" && "Risque important"}
                     </p>
                   </button>
@@ -124,24 +166,42 @@ export default function Report() {
               <Button onClick={() => setStep(3)} className="flex-1 h-12 rounded-xl bg-foreground text-background">Continuer</Button>
             </div>
           </motion.div>
-        ) : (
+        ) : step === 3 ? (
           <motion.div key="s3" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}>
-            <p className="mt-6 text-sm font-medium">3. Ajoute une note (optionnel)</p>
+            <p className="mt-6 text-sm font-medium">3. Ajoute des détails (optionnel)</p>
             <Textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Décris la situation en quelques mots..."
               className="mt-2 min-h-[110px] rounded-2xl border-border bg-card resize-none"
             />
-            <button className="mt-3 w-full p-4 rounded-2xl border border-dashed border-border bg-card flex items-center gap-3 text-left hover:border-primary transition-colors">
-              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
-                <Camera className="w-5 h-5 text-muted-foreground" />
+
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhoto} />
+            {photoPreview ? (
+              <div className="mt-3 relative rounded-2xl overflow-hidden border border-border">
+                <img src={photoPreview} alt="Aperçu" className="w-full h-40 object-cover" />
+                <button
+                  onClick={removePhoto}
+                  className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center"
+                >
+                  <X className="w-4 h-4 text-white" />
+                </button>
               </div>
-              <div>
-                <p className="font-semibold text-sm">Ajouter une photo</p>
-                <p className="text-[11px] text-muted-foreground">Aide la commu à confirmer plus vite</p>
-              </div>
-            </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="mt-3 w-full p-4 rounded-2xl border border-dashed border-border bg-card flex items-center gap-3 text-left hover:border-primary transition-colors"
+              >
+                <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
+                  <Camera className="w-5 h-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">Ajouter une photo</p>
+                  <p className="text-[11px] text-muted-foreground">Aide la commu à confirmer plus vite</p>
+                </div>
+              </button>
+            )}
 
             <div className="mt-4 flex items-center justify-between p-4 rounded-2xl bg-card border border-border">
               <div>
@@ -153,10 +213,57 @@ export default function Report() {
 
             <div className="mt-6 flex gap-2">
               <Button variant="outline" onClick={() => setStep(2)} className="flex-1 h-12 rounded-xl">Retour</Button>
-              <Button onClick={submit} className="flex-1 h-12 rounded-xl bg-gradient-hero text-primary-foreground shadow-glow">
-                Envoyer l’alerte ⚡
-              </Button>
+              <Button onClick={() => setStep(4)} className="flex-1 h-12 rounded-xl bg-foreground text-background">Vérifier</Button>
             </div>
+          </motion.div>
+        ) : (
+          <motion.div key="s4" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}>
+            <p className="mt-6 text-sm font-medium">4. Vérifie avant d'envoyer</p>
+            <div className="mt-3 rounded-2xl bg-card border border-border p-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-11 h-11 rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: `hsl(var(--traffic-${severity}) / 0.15)`, color: `hsl(var(--traffic-${severity}))` }}
+                >
+                  {meta && React.createElement(iconMap[meta.icon] || AlertTriangle, { className: "w-5 h-5" })}
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">{meta?.label} · {TRAFFIC_LEVELS[severity]?.label}</p>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <MapPin className="w-3 h-3" /> {DEFAULT_REPORT_LOCATION.location}
+                  </p>
+                </div>
+              </div>
+
+              {note && (
+                <div className="p-3 rounded-xl bg-muted/60">
+                  <p className="text-xs text-muted-foreground mb-0.5">Note :</p>
+                  <p className="text-sm">{note}</p>
+                </div>
+              )}
+
+              {photoPreview && (
+                <div className="rounded-xl overflow-hidden border border-border">
+                  <img src={photoPreview} alt="Photo" className="w-full h-32 object-cover" />
+                </div>
+              )}
+
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Publication dans le fil</span>
+                <span className="font-semibold">{postToFeed ? "Oui" : "Non"}</span>
+              </div>
+            </div>
+
+            <Button
+              onClick={submit}
+              disabled={submitting}
+              className="mt-6 w-full h-12 rounded-xl bg-gradient-hero text-primary-foreground shadow-glow disabled:opacity-60"
+            >
+              {submitting ? "Envoi en cours..." : "Envoyer l'alerte ⚡"}
+            </Button>
+            <Button variant="outline" onClick={() => setStep(3)} className="mt-2 w-full h-12 rounded-xl">
+              Retour
+            </Button>
           </motion.div>
         )}
       </AnimatePresence>

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { useParams } from "react-router-dom";
-import { POSTS, COMMENTS, INCIDENT_TYPES } from "@/lib/mockData";
+import { useParams, Link } from "react-router-dom";
+import { COMMENTS } from "@/lib/mockData";
+import { useRoutePulseStore, selectPostById } from "@/store/useRoutePulseStore";
 import { AlertPost } from "@/components/routepulse/AlertPost";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,10 +11,22 @@ import { toast } from "sonner";
 
 export default function PostDetail() {
   const { id } = useParams();
-  const post = POSTS.find((p) => p.id === id) || POSTS[0];
-  const initialComments = COMMENTS[post.id] || COMMENTS.p1;
+  const post = useRoutePulseStore(selectPostById(id));
+  const initialComments = post ? (COMMENTS[post.id] || []) : [];
   const [comments, setComments] = useState(initialComments);
   const [text, setText] = useState("");
+
+  if (!post) {
+    return (
+      <div className="px-4 pt-8 pb-24 text-center">
+        <p className="font-display text-xl font-semibold">Publication introuvable</p>
+        <p className="mt-2 text-sm text-muted-foreground">Cette alerte n&apos;existe plus ou a été retirée.</p>
+        <Link to="/app/feed" className="inline-block mt-4 text-sm font-semibold text-primary">
+          Retour au fil
+        </Link>
+      </div>
+    );
+  }
 
   const submit = (e) => {
     e.preventDefault();
@@ -27,7 +40,7 @@ export default function PostDetail() {
   };
 
   return (
-    <div className="px-4 pt-4 pb-24">
+    <div className="px-4 pt-4 pb-36">
       <AlertPost post={post} />
 
       <div className="mt-5">
@@ -59,20 +72,22 @@ export default function PostDetail() {
       </div>
 
       {/* Composer */}
-      <form onSubmit={submit} className="fixed bottom-24 inset-x-0 mx-auto max-w-2xl px-4">
-        <div className="glass rounded-2xl p-2 flex items-center gap-2 shadow-elevated">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="bg-gradient-hero text-primary-foreground text-xs font-semibold">VS</AvatarFallback>
-          </Avatar>
-          <Input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Ajoute un commentaire..."
-            className="border-0 bg-transparent focus-visible:ring-0 flex-1 text-sm"
-          />
-          <Button type="submit" size="icon" className="h-9 w-9 rounded-xl bg-primary" disabled={!text.trim()}>
-            <Send className="w-4 h-4" />
-          </Button>
+      <form onSubmit={submit} className="fixed bottom-0 inset-x-0 z-30 pb-[calc(5rem+env(safe-area-inset-bottom))]">
+        <div className="mx-auto max-w-2xl px-4">
+          <div className="glass rounded-2xl p-2 flex items-center gap-2 shadow-elevated">
+            <Avatar className="h-8 w-8">
+              <AvatarFallback className="bg-gradient-hero text-primary-foreground text-xs font-semibold">VS</AvatarFallback>
+            </Avatar>
+            <Input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Ajoute un commentaire..."
+              className="border-0 bg-transparent focus-visible:ring-0 flex-1 text-sm"
+            />
+            <Button type="submit" size="icon" className="h-9 w-9 rounded-xl bg-primary" disabled={!text.trim()}>
+              <Send className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </form>
     </div>

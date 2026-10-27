@@ -13,8 +13,8 @@ const items = [
 export const BottomNav = () => {
   const { pathname } = useLocation();
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-40 pb-[env(safe-area-inset-bottom)]">
-      <div className="mx-auto max-w-2xl px-3 pb-3">
+    <nav className="fixed bottom-0 inset-x-0 z-40 pb-[max(env(safe-area-inset-bottom),4px)]">
+      <div className="mx-auto max-w-2xl px-3 pb-2">
         <div className="glass rounded-2xl shadow-elevated px-2 py-1.5 flex items-center justify-between">
           {items.map(({ to, icon: Icon, label, primary }) => {
             const active = pathname === to || (to === "/app/carte" && pathname === "/app");

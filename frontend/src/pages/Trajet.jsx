@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { TrafficMap } from "@/components/routepulse/TrafficMap";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { INCIDENTS, INCIDENT_TYPES } from "@/lib/mockData";
+import { INCIDENT_TYPES } from "@/lib/mockData";
+import { useRoutePulseStore, selectIncidents } from "@/store/useRoutePulseStore";
 import { MapPin, ArrowRight, Clock, TrendingDown, AlertTriangle, Siren, CarFront, Waves, ShieldAlert, HardHat, Search, Route as RouteIcon } from "lucide-react";
 
 const iconMap = { AlertTriangle, Siren, CarFront, Waves, ShieldAlert, HardHat };
@@ -11,6 +12,7 @@ export default function Trajet() {
   const [from, setFrom] = useState("Cocody Riviera 3");
   const [to, setTo] = useState("Plateau, Immeuble CCIA");
   const [showResult, setShowResult] = useState(false);
+  const incidents = useRoutePulseStore(selectIncidents);
 
   return (
     <div className="px-4 pt-4">
@@ -44,7 +46,7 @@ export default function Trajet() {
         <>
           <div className="mt-4 rounded-2xl overflow-hidden border border-border bg-card">
             <div className="aspect-[4/3]">
-              <TrafficMap showRoute />
+              <TrafficMap incidents={incidents} showRoute />
             </div>
           </div>
 
@@ -68,7 +70,7 @@ export default function Trajet() {
               <AlertTriangle className="w-4 h-4 text-warning" /> Sur ton chemin
             </h3>
             <div className="mt-3 space-y-2">
-              {INCIDENTS.slice(0, 3).map((i, idx) => {
+              {incidents.slice(0, 3).map((i, idx) => {
                 const meta = INCIDENT_TYPES[i.type];
                 const Icon = iconMap[meta.icon] || AlertTriangle;
                 return (

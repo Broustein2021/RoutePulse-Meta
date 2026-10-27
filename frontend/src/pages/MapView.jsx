@@ -1,10 +1,17 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { TrafficMap, TrafficLegend } from "@/components/routepulse/TrafficMap";
-import { INCIDENTS, INCIDENT_TYPES } from "@/lib/mockData";
+import { IncidentListSkeleton } from "@/components/routepulse/Skeletons";
+import { EmptyState } from "@/components/routepulse/EmptyState";
+import { INCIDENT_TYPES } from "@/lib/mockData";
+import {
+  useRoutePulseStore,
+  selectIncidents,
+} from "@/store/useRoutePulseStore";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { AlertTriangle, Siren, CarFront, Waves, ShieldAlert, HardHat, MapPin, Clock, Users, Navigation, Share2 } from "lucide-react";
+import { AlertTriangle, Siren, CarFront, Waves, ShieldAlert, HardHat, MapPin, Clock, Users, Navigation, Share2, MessageCircle, Radar } from "lucide-react";
 import { toast } from "sonner";
 
 const iconMap = { AlertTriangle, Siren, CarFront, Waves, ShieldAlert, HardHat };
@@ -20,13 +27,57 @@ const FILTERS = [
 
 export default function MapView() {
   const [filter, setFilter] = useState("all");
-  const [selected, setSelected] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const incidents = useRoutePulseStore(selectIncidents);
+  const confirmIncident = useRoutePulseStore((s) => s.confirmIncident);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const t = setTimeout(() => setLoading(false), 500);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (location.state?.highlight) {
+      setSelectedId(location.state.highlight);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const filteredIncidents = useMemo(
+    () => incidents.filter((i) => filter === "all" || i.type === filter),
+    [incidents, filter],
+  );
+
+  const selected = useMemo(
+    () => incidents.find((i) => i.id === selectedId) ?? null,
+    [incidents, selectedId],
+  );
+
+  const isSelectedConfirmed = useRoutePulseStore((s) =>
+    selectedId ? !!s.confirmedIncidentIds[selectedId] : false,
+  );
+
+  const handleConfirm = () => {
+    if (!selectedId) return;
+    const ok = confirmIncident(selectedId);
+    if (ok) {
+      toast.success("Confirmation envoyée 💪");
+    } else {
+      toast.info("Tu as déjà confirmé cette alerte");
+    }
+  };
 
   return (
     <div className="px-4 pt-4">
       <div>
         <h1 className="font-display text-2xl font-semibold text-foreground">Carte en direct</h1>
-        <p className="text-sm text-muted-foreground">Abidjan · mis à jour il y a 12 sec</p>
+        <p className="text-sm text-muted-foreground">
+          Abidjan · {incidents.length} alerte{incidents.length > 1 ? "s" : ""} active{incidents.length > 1 ? "s" : ""}
+        </p>
       </div>
 
       {/* Filters */}
@@ -51,7 +102,11 @@ export default function MapView() {
       {/* Map card */}
       <div className="mt-2 rounded-2xl overflow-hidden border border-border bg-card shadow-soft relative">
         <div className="aspect-[3/4] sm:aspect-[4/3]">
-          <TrafficMap activeFilter={filter} onPickIncident={setSelected} />
+          <TrafficMap
+            incidents={incidents}
+            activeFilter={filter}
+            onPickIncident={(incident) => setSelectedId(incident.id)}
+          />
         </div>
         {/* Legend overlay */}
         <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
@@ -66,43 +121,53 @@ export default function MapView() {
       <div className="mt-5">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-lg font-semibold">Alertes proches</h2>
-          <span className="text-xs text-muted-foreground">{INCIDENTS.length} résultats</span>
+          <span className="text-xs text-muted-foreground">{loading ? "\u2014" : `${filteredIncidents.length} résultats`}</span>
         </div>
         <div className="mt-3 space-y-2">
-          {INCIDENTS.filter((i) => filter === "all" || i.type === filter).map((i) => {
-            const meta = INCIDENT_TYPES[i.type];
-            const Icon = iconMap[meta.icon] || AlertTriangle;
-            return (
-              <button
-                key={i.id}
-                onClick={() => setSelected(i)}
-                className="w-full flex items-center gap-3 p-3 rounded-2xl bg-card border border-border hover:shadow-elevated transition-shadow text-left"
-              >
-                <div
-                  className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ backgroundColor: `hsl(var(--traffic-${i.severity}) / 0.15)`, color: `hsl(var(--traffic-${i.severity}))` }}
+          {loading ? (
+            <IncidentListSkeleton />
+          ) : filteredIncidents.length === 0 ? (
+            <EmptyState
+              icon={Radar}
+              title="Aucune alerte"
+              description="Aucun incident signalé dans cette catégorie pour l'instant."
+            />
+          ) : (
+            filteredIncidents.map((i) => {
+              const meta = INCIDENT_TYPES[i.type];
+              const Icon = iconMap[meta.icon] || AlertTriangle;
+              return (
+                <button
+                  key={i.id}
+                  onClick={() => setSelectedId(i.id)}
+                  className="w-full flex items-center gap-3 p-3 rounded-2xl bg-card border border-border hover:shadow-elevated transition-shadow text-left"
                 >
-                  <Icon className="w-5 h-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm text-foreground truncate">{meta.label} · {i.road}</p>
-                  <p className="text-xs text-muted-foreground flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{i.time}</span>
-                    <span>·</span>
-                    <span className="inline-flex items-center gap-1"><Users className="w-3 h-3" />{i.confirmed} confirm.</span>
-                  </p>
-                </div>
-                <Badge variant="outline" className="rounded-full text-[10px] uppercase tracking-wide" style={{ borderColor: `hsl(var(--traffic-${i.severity}) / 0.4)`, color: `hsl(var(--traffic-${i.severity}))` }}>
-                  {i.severity}
-                </Badge>
-              </button>
-            );
-          })}
+                  <div
+                    className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: `hsl(var(--traffic-${i.severity}) / 0.15)`, color: `hsl(var(--traffic-${i.severity}))` }}
+                  >
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm text-foreground truncate">{meta.label} · {i.road}</p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{i.time}</span>
+                      <span>·</span>
+                      <span className="inline-flex items-center gap-1"><Users className="w-3 h-3" />{i.confirmed} confirm.</span>
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="rounded-full text-[10px] uppercase tracking-wide" style={{ borderColor: `hsl(var(--traffic-${i.severity}) / 0.4)`, color: `hsl(var(--traffic-${i.severity}))` }}>
+                    {i.severity}
+                  </Badge>
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
 
       {/* Detail sheet */}
-      <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+      <Sheet open={!!selected} onOpenChange={(open) => !open && setSelectedId(null)}>
         <SheetContent side="bottom" className="rounded-t-3xl max-h-[80vh]">
           {selected && (() => {
             const meta = INCIDENT_TYPES[selected.type];
@@ -140,12 +205,26 @@ export default function MapView() {
                   Les utilisateurs à proximité rapportent une {meta.label.toLowerCase()} confirmée. Une déviation par la voie parallèle est conseillée. Rejoins la discussion dans le fil.
                 </p>
                 <div className="mt-5 flex gap-2">
-                  <Button className="flex-1 rounded-xl bg-foreground text-background" onClick={() => toast.success("Confirmation envoyée 💪")}>
-                    Confirmer
+                  <Button
+                    className="flex-1 rounded-xl bg-foreground text-background disabled:opacity-50"
+                    onClick={handleConfirm}
+                    disabled={isSelectedConfirmed}
+                  >
+                    {isSelectedConfirmed ? "Déjà confirmé" : "Confirmer"}
                   </Button>
-                  <Button variant="outline" className="flex-1 rounded-xl" onClick={() => toast("Lien copié 🔗")}>
-                    <Share2 className="w-4 h-4 mr-2" /> Partager
-                  </Button>
+                  {selected.postId ? (
+                    <Button
+                      variant="outline"
+                      className="flex-1 rounded-xl"
+                      onClick={() => navigate(`/app/feed/${selected.postId}`)}
+                    >
+                      <MessageCircle className="w-4 h-4 mr-2" /> Discussion
+                    </Button>
+                  ) : (
+                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => toast("Lien copié 🔗")}>
+                      <Share2 className="w-4 h-4 mr-2" /> Partager
+                    </Button>
+                  )}
                 </div>
               </>
             );

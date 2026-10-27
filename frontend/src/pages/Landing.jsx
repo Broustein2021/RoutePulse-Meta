@@ -8,7 +8,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { TrafficMap, TrafficLegend } from "@/components/routepulse/TrafficMap";
 import { AlertPost } from "@/components/routepulse/AlertPost";
 import { StatChip } from "@/components/routepulse/StatChip";
-import { POSTS, STATS } from "@/lib/mockData";
+import { POSTS, STATS, TRAFFIC_LEVELS } from "@/lib/mockData";
 import {
   ArrowRight, Zap, ShieldCheck, Users, MapPin, Sparkles, TrendingUp, Clock,
   MessageCircleHeart, Layers, LineChart, Menu, X, Bell, Heart,
@@ -283,7 +283,7 @@ const LiveMapSection = () => (
               { c: "traffic-danger", l: "Danger", d: "Inondation, chaussée effondrée. À éviter." },
             ].map((row) => (
               <div key={row.l} className="flex items-start gap-3 p-3 rounded-xl bg-card border border-border">
-                <span className={`mt-1 w-3 h-3 rounded-full flex-shrink-0 bg-${row.c}`} />
+                <span className="mt-1 w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: TRAFFIC_LEVELS[row.c]?.hex }} />
                 <div>
                   <p className="font-semibold text-sm text-foreground">{row.l}</p>
                   <p className="text-xs text-muted-foreground">{row.d}</p>
@@ -372,7 +372,7 @@ const ForWho = () => {
         <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {personas.map((p) => (
             <Card key={p.title} className="rounded-2xl p-6 border-border shadow-soft flex flex-col">
-              <div className={`w-11 h-11 rounded-xl flex items-center justify-center bg-${p.color}/10 text-${p.color}`}>
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ backgroundColor: `hsl(var(--${p.color}) / 0.1)`, color: `hsl(var(--${p.color}))` }}>
                 <p.icon className="w-5 h-5" style={{ color: `hsl(var(--${p.color}))` }} />
               </div>
               <h3 className="mt-4 font-display text-lg font-semibold">{p.title}</h3>

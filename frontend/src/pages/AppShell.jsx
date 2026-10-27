@@ -1,14 +1,18 @@
-import React from "react";
+import React, { useState } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { BottomNav } from "@/components/routepulse/BottomNav";
+import { SearchDialog } from "@/components/routepulse/SearchDialog";
 import { Activity, Bell, ChevronLeft, Search } from "lucide-react";
 
 export default function AppShell() {
   const { pathname } = useLocation();
   const isDetail = pathname.includes("/feed/");
+  const [searchOpen, setSearchOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+
       {/* Top bar */}
       <header className="sticky top-0 z-40 bg-background/85 backdrop-blur-lg border-b border-border">
         <div className="mx-auto max-w-2xl px-4 h-14 flex items-center justify-between">
@@ -25,7 +29,11 @@ export default function AppShell() {
             </Link>
           )}
           <div className="flex items-center gap-1">
-            <button className="h-9 w-9 rounded-xl hover:bg-muted flex items-center justify-center" aria-label="Rechercher">
+            <button
+              className="h-9 w-9 rounded-xl hover:bg-muted flex items-center justify-center"
+              aria-label="Rechercher"
+              onClick={() => setSearchOpen(true)}
+            >
               <Search className="w-4 h-4 text-muted-foreground" />
             </button>
             <button className="relative h-9 w-9 rounded-xl hover:bg-muted flex items-center justify-center" aria-label="Notifications">

@@ -83,6 +83,30 @@ export const POSTS = [
   },
 ];
 
+/** Default signed-in user for new reports created in the app. */
+export const CURRENT_USER = {
+  name: "Aya Kouassi",
+  handle: "@aya_abj",
+  avatar: "AK",
+  verified: true,
+  badge: "Contributeur Or",
+};
+
+export const DEFAULT_REPORT_LOCATION = {
+  location: "Cocody, Riviera 3",
+  road: "Riviera 3",
+};
+
+/** Deep-cloned seed data for the Zustand store (avoids mutating module exports). */
+export const getInitialIncidents = () =>
+  INCIDENTS.map((incident) => ({ ...incident }));
+
+export const getInitialPosts = () =>
+  POSTS.map((post) => ({
+    ...post,
+    author: { ...post.author },
+  }));
+
 export const COMMENTS = {
   p1: [
     { id: "c1", author: "Serge B.", avatar: "SB", time: "6 min", text: "Confirmé, je suis coincé depuis 15 min. Merci du signalement 🙏", likes: 12 },

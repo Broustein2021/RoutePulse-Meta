@@ -1,24 +1,37 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Heart, MessageCircle, Share2, Flag, ShieldCheck, MapPin, MoreHorizontal, Bookmark } from "lucide-react";
+import { Heart, MessageCircle, Share2, Flag, ShieldCheck, MapPin, MoreHorizontal, Bookmark, Navigation } from "lucide-react";
 import { INCIDENT_TYPES, TRAFFIC_LEVELS } from "@/lib/mockData";
+import {
+  useRoutePulseStore,
+  selectIsPostLiked,
+  selectIsPostConfirmed,
+} from "@/store/useRoutePulseStore";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
 export const AlertPost = ({ post, compact = false }) => {
-  const [liked, setLiked] = useState(false);
-  const [likes, setLikes] = useState(post.likes);
   const [saved, setSaved] = useState(false);
   const navigate = useNavigate();
+  const toggleLike = useRoutePulseStore((s) => s.toggleLike);
+  const confirmPost = useRoutePulseStore((s) => s.confirmPost);
+  const liked = useRoutePulseStore(selectIsPostLiked(post.id));
+  const confirmed = useRoutePulseStore(selectIsPostConfirmed(post.id));
+
   const meta = INCIDENT_TYPES[post.type];
   const severity = TRAFFIC_LEVELS[post.severity];
 
   const handleLike = () => {
-    setLiked(!liked);
-    setLikes(liked ? likes - 1 : likes + 1);
+    toggleLike(post.id);
   };
 
   const handleShare = () => {
@@ -30,7 +43,12 @@ export const AlertPost = ({ post, compact = false }) => {
   };
 
   const handleConfirm = () => {
-    toast.success("Alerte confirmée ✅", { description: "Merci, tu aides à fiabiliser l'info." });
+    const ok = confirmPost(post.id);
+    if (ok) {
+      toast.success("Alerte confirmée ✅", { description: "Merci, tu aides à fiabiliser l'info." });
+    } else {
+      toast.info("Tu as déjà confirmé cette alerte");
+    }
   };
 
   return (
@@ -58,14 +76,16 @@ export const AlertPost = ({ post, compact = false }) => {
           </div>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <MapPin className="w-3 h-3" />
-            <span className="truncate">{post.location}</span>
+            <span
+              className="truncate cursor-pointer hover:text-primary transition-colors"
+              onClick={() => navigate('/app/carte', { state: { highlight: post.incidentId } })}
+            >
+              {post.location}
+            </span>
             <span>·</span>
             <span>{post.time}</span>
           </div>
         </div>
-        <button className="p-1.5 rounded-full hover:bg-muted transition-colors" aria-label="Plus">
-          <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
-        </button>
       </div>
 
       {/* Type banner */}
@@ -98,30 +118,53 @@ export const AlertPost = ({ post, compact = false }) => {
 
       {/* Actions */}
       <div className="flex items-center gap-1 mt-auto p-2 pt-3 border-t border-border/60 mx-2">
-        <Button variant="ghost" size="sm" onClick={handleLike} className={`flex-1 gap-1.5 rounded-xl ${liked ? "text-primary" : "text-muted-foreground"}`}>
-          <Heart className={`w-4 h-4 ${liked ? "fill-primary" : ""}`} />
-          <span className="text-xs font-medium">{likes}</span>
-        </Button>
         <Button variant="ghost" size="sm" onClick={() => navigate(`/app/feed/${post.id}`)} className="flex-1 gap-1.5 rounded-xl text-muted-foreground">
           <MessageCircle className="w-4 h-4" />
           <span className="text-xs font-medium">{post.comments}</span>
         </Button>
-        <Button variant="ghost" size="sm" onClick={handleShare} className="flex-1 gap-1.5 rounded-xl text-muted-foreground">
-          <Share2 className="w-4 h-4" />
-          <span className="text-xs font-medium">{post.shares}</span>
-        </Button>
-        <Button variant="ghost" size="sm" onClick={handleConfirm} className="flex-1 gap-1.5 rounded-xl text-accent hover:text-accent hover:bg-accent/10">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleConfirm}
+          disabled={confirmed}
+          className={`flex-1 gap-1.5 rounded-xl ${confirmed ? "text-accent opacity-70" : "text-accent hover:text-accent hover:bg-accent/10"}`}
+        >
           <ShieldCheck className="w-4 h-4" />
-          <span className="text-xs font-medium hidden sm:inline">Confirmer</span>
+          <span className="text-xs font-medium">
+            {confirmed ? "Confirmé" : "Confirmer"}
+          </span>
         </Button>
-        <div className="flex">
-          <Button variant="ghost" size="icon" onClick={() => setSaved(!saved)} className="h-9 w-9 rounded-xl text-muted-foreground">
-            <Bookmark className={`w-4 h-4 ${saved ? "fill-primary text-primary" : ""}`} />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={handleReport} className="h-9 w-9 rounded-xl text-muted-foreground">
-            <Flag className="w-4 h-4" />
-          </Button>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-muted-foreground">
+              <MoreHorizontal className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="rounded-xl min-w-[160px]">
+            <DropdownMenuItem onClick={handleLike} className="gap-2">
+              <Heart className={`w-4 h-4 ${liked ? "fill-primary text-primary" : ""}`} />
+              <span>{liked ? "Retirer le like" : "J'aime"}</span>
+              <span className="ml-auto text-xs text-muted-foreground">{post.likes}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleShare} className="gap-2">
+              <Share2 className="w-4 h-4" />
+              <span>Partager</span>
+              <span className="ml-auto text-xs text-muted-foreground">{post.shares}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setSaved(!saved)} className="gap-2">
+              <Bookmark className={`w-4 h-4 ${saved ? "fill-primary text-primary" : ""}`} />
+              <span>{saved ? "Sauvegardé" : "Sauvegarder"}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/app/carte', { state: { highlight: post.incidentId } })} className="gap-2">
+              <Navigation className="w-4 h-4" />
+              <span>Voir sur la carte</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleReport} className="gap-2 text-destructive">
+              <Flag className="w-4 h-4" />
+              <span>Signaler</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </motion.article>
   );
