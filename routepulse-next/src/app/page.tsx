@@ -1,51 +1,37 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { supabase, getSignalements, getStats } from '@/lib/supabase'
 import dynamic from 'next/dynamic'
 import BottomNav from '@/components/routepulse/BottomNav'
+import { getSignalements, getStats } from '@/lib/client-api'
+import { usePolling } from '@/hooks/usePolling'
 
-const MapComponent = dynamic(
-  () => import('@/components/routepulse/TrafficMap'),
+const MapboxMap = dynamic(
+  () => import('@/components/routepulse/MapboxMap'),
   { ssr: false }
 )
 
+const STATS_VIDES = {
+  total: 0,
+  confirmes: 0,
+  dernieres_24h: 0,
+  par_type: [],
+}
+
+async function chargerAccueil() {
+  const [signalements, stats] = await Promise.all([
+    getSignalements(),
+    getStats(),
+  ])
+  return { signalements, stats }
+}
+
 export default function Home() {
-  const [signalements, setSignalements] = useState([])
-  const [stats, setStats] = useState({ total: 0, confirmes: 0, byType: {} })
-  const [loading, setLoading] = useState(true)
+  const { data, error, loading, refresh } = usePolling(chargerAccueil)
 
-  useEffect(() => {
-    loadData()
-    const channel = supabase
-      .channel('signalements-live')
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'signalements' },
-        (payload) => {
-          setSignalements(prev => [payload.new, ...prev])
-        }
-      )
-      .subscribe()
-
-    return () => supabase.removeChannel(channel)
-  }, [])
-
-  const loadData = async () => {
-    try {
-      const [data, statsData] = await Promise.all([
-        getSignalements(),
-        getStats()
-      ])
-      setSignalements(data)
-      setStats(statsData)
-    } catch (err) {
-      console.error('Erreur chargement:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const signalements = data?.signalements ?? []
+  const stats = data?.stats ?? STATS_VIDES
 
   return (
-    <main className="flex flex-col h-screen bg-gray-50">
+    <main className="flex flex-col h-dvh bg-gray-50">
       <div className="bg-green-800 text-white px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-orange-400 font-bold text-lg">RoutePulse</span>
@@ -61,7 +47,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="flex-1 relative">
+      <div className="relative min-h-0 flex-1">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -70,7 +56,20 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          <MapComponent signalements={signalements} />
+          <MapboxMap signalements={signalements} />
+        )}
+
+        {error && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1001] flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 shadow">
+            <span>Données momentanément indisponibles.</span>
+            <button
+              type="button"
+              onClick={refresh}
+              className="font-semibold underline"
+            >
+              Réessayer
+            </button>
+          </div>
         )}
       </div>
 

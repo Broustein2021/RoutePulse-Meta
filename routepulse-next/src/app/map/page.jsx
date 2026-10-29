@@ -1,7 +1,8 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import dynamic from 'next/dynamic'
 import BottomNav from '@/components/routepulse/BottomNav'
+import { getSignalements } from '@/lib/client-api'
+import { usePolling } from '@/hooks/usePolling'
 import { AlertTriangle } from 'lucide-react'
 
 const TYPE_CONFIG = {
@@ -13,114 +14,48 @@ const TYPE_CONFIG = {
   'autre':        { emoji: '📍', color: '#455A64' },
 }
 
-export default function MapPage() {
-  const [signalements, setSignalements] = useState([])
-  const [MapComponents, setMapComponents] = useState(null)
-
-  useEffect(() => {
-    // Chargement dynamique Leaflet (SSR-safe)
-    import('leaflet').then(L => {
-      delete L.Icon.Default.prototype._getIconUrl
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-        iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      })
-    })
-
-    import('react-leaflet').then(({ MapContainer, TileLayer, CircleMarker, Popup }) => {
-      setMapComponents({ MapContainer, TileLayer, CircleMarker, Popup })
-    })
-
-    loadSignalements()
-
-    // Temps réel
-    const channel = supabase
-      .channel('map-live')
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'signalements' },
-        () => loadSignalements()
-      )
-      .subscribe()
-
-    return () => supabase.removeChannel(channel)
-  }, [])
-
-  const loadSignalements = async () => {
-    const { data } = await supabase
-      .from('signalements')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(100)
-    setSignalements(data || [])
-  }
-
-  if (!MapComponents) return (
-    <div className="flex items-center justify-center h-screen bg-gray-50">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-800 mx-auto mb-3" />
-        <p className="text-gray-500 text-sm">Chargement de la carte...</p>
+const MapboxMap = dynamic(
+  () => import('@/components/routepulse/MapboxMap'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full w-full items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-800 mx-auto mb-3" />
+          <p className="text-gray-500 text-sm">Chargement de la carte...</p>
+        </div>
       </div>
-    </div>
-  )
+    ),
+  }
+)
 
-  const { MapContainer, TileLayer, CircleMarker, Popup } = MapComponents
+const chargerSignalements = () => getSignalements({ limit: 300 })
+
+export default function MapPage() {
+  const { data, error, refresh } = usePolling(chargerSignalements)
+  const signalements = data ?? []
 
   return (
-    <div className="flex flex-col" style={{ height: '100vh' }}>
+    <div className="flex h-dvh flex-col">
 
-      {/* Carte — hauteur = écran - BottomNav (64px) */}
-      <div style={{ height: 'calc(100vh - 64px)', position: 'relative' }}>
-        <MapContainer
-          center={[5.3599, -4.0083]}
-          zoom={12}
-          style={{ height: '100%', width: '100%' }}
-          zoomControl={true}
-        >
-          <TileLayer
-            attribution='&copy; OpenStreetMap'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+      {/* Carte — occupe l'écran au-dessus de la BottomNav (64px) */}
+      <div className="relative mb-16 min-h-0 flex-1">
+        <MapboxMap signalements={signalements} className="h-full w-full" />
 
-          {signalements.map(sig => {
-            const config = TYPE_CONFIG[sig.type] || TYPE_CONFIG['autre']
-            const radius = sig.statut === 'confirme' ? 14 : 8
-            return (
-              <CircleMarker
-                key={sig.id}
-                center={[sig.latitude, sig.longitude]}
-                radius={radius}
-                pathOptions={{
-                  color: config.color,
-                  fillColor: config.color,
-                  fillOpacity: sig.statut === 'confirme' ? 0.85 : 0.45,
-                  weight: sig.statut === 'confirme' ? 3 : 1,
-                }}
-              >
-                <Popup>
-                  <div className="text-sm">
-                    <p className="font-bold mb-1">
-                      {config.emoji} {sig.type.replace('-', ' ')}
-                    </p>
-                    {sig.description && (
-                      <p className="text-gray-600 mb-1">{sig.description}</p>
-                    )}
-                    <p className="text-xs text-gray-400">
-                      {sig.statut === 'confirme' ? '✅ Confirmé' : '⏳ Isolé'}
-                    </p>
-                    {sig.photo_url && (
-                      <img
-                        src={sig.photo_url}
-                        alt="photo"
-                        className="mt-2 w-32 h-24 object-cover rounded"
-                      />
-                    )}
-                  </div>
-                </Popup>
-              </CircleMarker>
-            )
-          })}
-        </MapContainer>
+        {/* Erreur réseau discrète */}
+        {error && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1001] flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 shadow">
+            <AlertTriangle size={14} />
+            <span>Données momentanément indisponibles.</span>
+            <button
+              type="button"
+              onClick={refresh}
+              className="font-semibold underline"
+            >
+              Réessayer
+            </button>
+          </div>
+        )}
 
         {/* Légende */}
         <div className="absolute top-3 right-3 z-[1000] bg-white rounded-xl p-3 shadow-lg text-xs space-y-1.5">
